@@ -21,7 +21,7 @@ next eight hours on another tile, that person will show up in the second
 tile’s aggregated data as **“destination”**. If it appears on the same
 tile, the destination will be that same tile as origin. There is a
 sample of the *Movement between Administrative Regions* processed
-dataset as a R console output.
+dataset as a R console output. 
 
     head(trips, keepnums = FALSE)
 
