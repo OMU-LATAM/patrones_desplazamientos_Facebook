@@ -1,37 +1,31 @@
-get_dist_and_trips <- function(ciudad, abrev, folder, pop_d, 
-                               pop_5_d, pop_60_d, level_osm){
+library(sf)
+library(tidyverse)
+library(readr)
+
+table <- read.csv("data/cities_table.csv") ## Se carga la tabla básica de ciudades
+geo <- st_read("data/geo2.geojson") ## Se cargan las geometrías de las ciudades, previamente procesadas
+
+## Se crean listas vacías que contentrán cada uno de los dataframes como elementos.
+
+distancias_medias <- list()
+viajes_adm_final <- list()
+viajes <- list()
+distancias <- list()
+
+for (j in 1:nrow(table)){    ## El loop recorrerá cada fila de la tabla
   
   ## Se buscan los nombres de los archivos de los dos tipos de datasets utilizados.
-  adm_files <- list.files(paste0(folder, "/adm"), full.names = T)
-  tiles_files <- list.files(paste0(folder, "/tiles"), full.names = T)
+  adm_files <- grep("0800", list.files(paste0("data/", table[j,]$abrev, "/adm"), full.names = T), value = T)
+  tiles_files <- grep("0800", list.files(paste0("data/", table[j,]$abrev, "/tiles"), full.names = T), value = T)
   
   ## Se arma un boundary box (BBOX) con los límites geográficos del dataset de Tiles.
   
-  bbox2 <- read.csv(tiles_files[1])[,1] %>%
+  municipalities <- geo %>% filter(city == table[j, ]$city) ## Se filtra la ciudad j de la tabla
+  
+  bbox2 <- municipalities %>% 
     st_as_sfc() %>% st_bbox()
   
-  bbox <- opq(bbox = bbox2)
-  
-  ## Se crean desde OSM líneas que definan partidos
-  
-  boundaries <- bbox %>%
-    add_osm_feature(key = 'admin_level', value = level_osm) %>% 
-    osmdata_sf %>% unique_osmdata 
-  
-  municipalities <- boundaries$osm_multipolygons
-  
-  municipalities <- st_transform(municipalities %>%  select(name) %>% 
-                                   rename(partido=name), st_crs(4326))
-  
-  ## CHEQUEO LA INTEGRALIDAD DE MUNICIPALITIES
-  ## Si dan todas TRUE, se pasa a la siguiente línea.
-  ## Si da alguna FALSE, hay que hacer coincidir los nombres de los polígonos
-  ## de OSM con los nombres de Facebook (por ejemplo, tildes o espacios)
-  
-  if(!all(sort(unique(read.csv(adm_files[1])$start_polygon_name)) %in% 
-     sort(municipalities$partido))){
-    stop("No todos los polígonos de OSM se encuentran en el dataset de Facebook.")
-    }
+  pop_d <- paste0("data/pop/", table[j, ]$country, "_pop.csv") ## Se busca el archivo de High Resolution Density Maps
   
   ## Se lee el archivo de High Resolution Density Maps y se transforma a SF
   pop_hd <- read_csv(pop_d) %>%                                        # Lee el archivo de población
@@ -39,26 +33,37 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
            longitude < bbox2[3], latitude < bbox2[4]) %>% 
     st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(4326))  #se convierte a SF con CRS 4326
   
+  if (ncol(pop_hd)==3){pop_hd <- pop_hd %>% select(c(2,3))} ## Algunos datasets están estructurados con dos proyecciones (2015 y 2020), para el estudio nos quedamos siempre con las de 2020.
+  
+  colnames(pop_hd)[1] <-  "population"
   ## Se intersectan cada uno de los puntos de population con las geometrías administrativas.
   ## Luego se quitan las geometrías para que el dataset sea más liviano, ya que no sirven más.
   ## Se realiza el mismo procedimiento para los otros dos datasets de population (menores de 5 y mayores de 60)
-   intersect_pop <- st_join(municipalities, pop_hd) %>% st_drop_geometry()
+  intersect_pop <- st_join(municipalities, pop_hd) %>% st_drop_geometry()
   
   rm(list=c("pop_hd")) ## Borrado de dataframes innecesarios
+  
+  pop_5_d <- paste0("data/pop/", table[j, ]$country, "_5.csv")
   
   pop_5 <- read_csv(pop_5_d) %>% 
     filter(longitude > bbox2[1], latitude > bbox2[2],
            longitude < bbox2[3], latitude < bbox2[4]) %>% 
     st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(4326))
   
+  colnames(pop_5)[1] <-  "population"
+  
   intersect_pop_5 <- st_join(municipalities, pop_5) %>% st_drop_geometry()
   
   rm(list=c("pop_5")) ## Borrado de dataframes innecesarios
+  
+  pop_60_d <- paste0("data/pop/", table[j, ]$country, "_60.csv")
   
   pop_60 <- read_csv(pop_60_d) %>% 
     filter(longitude > bbox2[1], latitude > bbox2[2],
            longitude < bbox2[3], latitude < bbox2[4]) %>% 
     st_as_sf(coords = c("longitude", "latitude"), crs = st_crs(4326)) 
+  
+  colnames(pop_60)[1] <-  "population"
   
   intersect_pop_60 <- st_join(municipalities, pop_60) %>% st_drop_geometry()
   
@@ -68,17 +73,16 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
   ## se efectúa un group_by y un summarize de la población
   
   intersect_pop <- intersect_pop %>%
-    group_by(partido) %>% 
-    summarise(pobl = sum(as.numeric(general_2020))) 
+    group_by(start_polygon_name) %>% 
+    summarise(pobl = sum(as.numeric(population))) 
   
   intersect_pop_60 <- intersect_pop_60 %>%
-    group_by(partido) %>% 
-    summarise(pobl_60 = sum(elderly_60_plus_2020))
+    group_by(start_polygon_name) %>% 
+    summarise(pobl_60 = sum(population))
   
   intersect_pop_5 <- intersect_pop_5 %>%
-    group_by(partido) %>% 
-    summarise(pobl_5 = sum(children_under_five_2020)) 
-  
+    group_by(start_polygon_name) %>% 
+    summarise(pobl_5 = sum(population)) 
   
   ## Para cumplimentar requistos metodológicos, se procede a quitar de la population
   ## a los niños menores a 5 años y a los mayores de 60 años. 
@@ -87,14 +91,10 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
     left_join(intersect_pop_5) %>% 
     left_join(intersect_pop_60) %>% 
     mutate(pobl = pobl - pobl_5 - pobl_60) %>% 
-    dplyr::select(partido, pobl)
+    dplyr::select(start_polygon_name, pobl)
   
   rm(list=c("intersect_pop_5", "intersect_pop_60")) ## Borrado de dataframes innecesarios
   
-  ## Se crean listas vacías que contentrán cada uno de los dataframes como elementos.
-  
-  distancias_medias <- list()
-  viajes_adm_final <- list()
   
   ## Aquí comienza el loop que generará el procesamiento de cada dataset para cada fecha.
   
@@ -104,9 +104,6 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
     ## Es fundamental que a la fecha i de un dataset le corresponda la fecha i del otro.
     
     mov_adm <- read.csv(adm_files[i])
-    
-    ## Para hacer más facil el proceso, se renombra la primera columna del dataset
-    colnames(intersect_pop)[1] <- "start_polygon_name"
     
     ## Se genera el primer factor de expansión, el cual compara la cantidad de personas
     ## reales con la cantidad de viajes que surgen de cada partido.
@@ -118,7 +115,6 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
     
     ## Se lee el archivo i en formato Tiles. 
     mov_tiles <- read.csv(tiles_files[i]) 
-    
     
     ## Se obtiene el segundo factor de expansión, que es el que representa la cantidad
     ## de viajes "cortos" dentro del mismo partido o municipio
@@ -157,7 +153,7 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
       bind_rows(viajes_cortos) %>%                                  ## Y se suman las filas de los viajes cortos, que sí o sí van a ser con el mismo polígono de origen y de destino
       mutate(date = as.Date(date_time))                             ## Se formaliza la fecha
     
-    distancias_medias[[i]] <- viajes_adm_final[[i]] %>%             ## Se crea el dataset de distancias medias
+    distancias_medias[[i]]  <- viajes_adm_final[[i]] %>%             ## Se crea el dataset de distancias medias
       mutate(viajes = data.table::nafill(viajes, fill = 0)) %>%     ## Se llenan los viajes NA con 0
       group_by(start_polygon_name, date) %>%                        ## Se agrupa según el polígono de origen
       summarise(distancia_media = stats::weighted.mean(length_km, viajes)) %>%  ## Se calculan las distancias medias ponderadas
@@ -165,10 +161,27 @@ get_dist_and_trips <- function(ciudad, abrev, folder, pop_d,
     print(i)
   }
   
-  viajes_adm_final <- bind_rows(viajes_adm_final) %>% ## Se bindean todos los elementos para dar lugar a un sólo dataset
-    mutate(city = ciudad) ## Se nombra a la ciudad en cuestión 
+  viajes[[j]] <- bind_rows(viajes_adm_final) %>% ## Se bindean todos los elementos para dar lugar a un sólo dataset
+    mutate(city = table[j, ]$city) ## Se nombra a la ciudad en cuestión 
   
-  distancias_medias <- bind_rows(distancias_medias)  %>% ## Se bindean todos los elementos para dar lugar a un sólo dataset
-    mutate(city = ciudad) ## Se nombra a la ciudad en cuestión 
+  distancias[[j]] <- bind_rows(distancias_medias) %>% ## Se bindean todos los elementos para dar lugar a un sólo dataset
+    mutate(city = table[j, ]$city) ## Se nombra a la ciudad en cuestión 
   
+  print(paste0("DONE! ", table[j, ]$city)) ## Pequeño mensaje para mostrar el progreso del loop
 }
+
+viajes <- bind_rows(viajes) %>% rename(geometry=GEOMETRY) %>%         ## se convierten a data.frames las listas con j elementos
+  dplyr::select(geometry, start_polygon_name, end_polygon_name,       ## se seleccionan las variables de interés
+                fact_expansion, viajes, length_km, date, city) %>% 
+  filter(viajes>0)                                                    ## se filtran regiones donde existan viajes 0 (esta acción tambien filtra los NA)
+
+distancias_medias <- bind_rows(distancias) %>% 
+  filter(distancia_media>=0)
+
+## Se borran data.frames innecesarios
+
+rm(list=c("distancias", "expansion", "expansion_2", 
+          "intersect_pop", "mov_adm", "mov_tiles", "municipalities", "viajes_adm_final",
+          "viajes_cortos", "adm_files", "bbox2", "i", "j", 
+          "pop_5_d", "pop_60_d", "pop_d", "tiles_files"))
+
