@@ -3,7 +3,7 @@ library(tidyverse)
 library(readr)
 
 table <- read.csv("data/cities_table.csv") ## Se carga la tabla básica de ciudades
-geo <- st_read("data/geo2.geojson") ## Se cargan las geometrías de las ciudades, previamente procesadas
+geo <- st_read("data/geo_shp.shp") ## Se cargan las geometrías de las ciudades, previamente procesadas
 
 ## Se crean listas vacías que contentrán cada uno de los dataframes como elementos.
 
