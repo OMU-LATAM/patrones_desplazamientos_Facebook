@@ -1,27 +1,9 @@
 ## Introduction
 
-When people use the Facebook app with location services enabled, an
-approximation of the latitude and longitude of the device is received at
-regular intervals. Location information is used in a variety of ways,
-such as providing an in-app features or content that is more relevant to
-people. **Facebook Disaster Maps** provide information about where
-people are and how they move in a aggregated way, preserving privacy
-with some processes like masking and random noise but making the data
-usable and interpretable. The information is presented at two levels: by
-tile (squares) or by administrative region (such as population
-censuses).
+Cuando las personas usan la aplicación de Facebook con los servicios de ubicación habilitados, los servidores reciben y guardan una aproximación de la latitud y la longitud del dispositivo a intervalos regulares. La información de ubicación se usa de varias maneras, como proporcionar funciones o contenido dentro de la aplicación que es más relevante para las personas. Los datasets de Facebook Disaster Maps (incluidos en el portal de Facebook for Good) proporcionan información sobre dónde se encuentran las personas y cómo se mueven de forma agregada, preservando la privacidad con algunos procesos como el privacy masking y random noise, pero manteniendo la usabilidad y la interpretabilidad de los datos. La información se presenta en dos niveles: por mosaico o tiles (cuadrados) o por región administrativa (como los censos oficiales de población) y en tres definiciones horarias: 8 de la mañana, 4 de la tarde y a la medianoche (en huso horario UTC). 
 
-The region is divided into squares of 2 km x 2 km. Facebook detects the
-coordinates of people and classifies them according to the tile in which
-they have been the longest in the eight hours prior to the time of data
-collection. For example, if the dataset refers to 8 a.m. and the person
-was at home, Facebook will classify that person in the corresponding
-tile and assign an **“origin”** on it. If the person spent most of the
-next eight hours on another tile, that person will show up in the second
-tile’s aggregated data as **“destination”**. If it appears on the same
-tile, the destination will be that same tile as origin. There is a
-sample of the *Movement between Administrative Regions* processed
-dataset as a R console output. 
+En todos los casos, para compilar la información, Facebook parte tiles de 2 kilómetros por lado, detecta las coordenadas de las personas y las clasifica según el tile en el que han estado más tiempo en las ocho horas previas al momento de la hora mencionada en el dataset. Por ejemplo, si el conjunto de datos se refiere a las 8 a.m. y la persona estaba en su casa, Facebook clasificará a esa persona en el tile correspondiente y se lo asignará como un "**origen**". Si la persona pasó la mayor parte de las siguientes ocho horas en otro cuadrado, esa persona aparecerá en los datos agregados del segundo tile como "**destino**". Si aparece en el mismo tile, el origen y el destino será el mismo, incluso aunque la persona no se mueva. 
+La siguiente tabla es un ejemplo para la ciudad de Santiago de algunas de las columnas del dataset Movement between Administrative Regions.
 
     head(trips, keepnums = FALSE)
 
@@ -33,32 +15,16 @@ dataset as a R console output.
     ## 5        San Joaquín         Recoleta    90     10.00 2021-10-05 Santiago
     ## 6           Santiago         Vitacura   878     11.00 2021-10-05 Santiago
 
-## Population Bias
+## Sesgo de población
 
-From the point of view of the administrative regions, there may be
-differences in the use of Facebook applications and/or the acceptance of
-the use of geospatial location. The High Resolution Density Maps dataset
-takes official information from censuses and population projections of
-each country and locates the population based on its density and
-quantity geospatially through machine learning mechanisms. A spatial
-join is made to this information together with the polygons of the
-municipalities and in this way the population of each of them is
-obtained. Therefore, we tried to remove this bias by taking sums of all
-trips from each of the origins and comparing them with the corresponding
-population of each region. From there, expansion factors or weights are
-extracted that we apply to the trips of each administrative region to
-have a more “real” notion of the flows of people between municipalities.
+Es para destacar la posibilidad de analizar los datos de manera sesgada si no se establecen ciertos parámetros o criterios a la hora de calcular distancias o flujos de personas. Con respecto a esto, la principal hipótesis que se introdujo fue que la distribución del uso de las aplicaciones de Facebook y/o el nivel de aceptación a activar la geolocalización en los dispositivos móviles a lo largo de cada una de las regiones administrativas a estudiar. Para intentar quitar este sesgo, se introdujo el uso de un tercer dataset proveniente de Facebook, el High Resolution Density Map (HRDM).
+	Los datasets de High Resolution Density Maps toman información oficial de los censos y proyecciones de población de cada país y ubican a la población en función de su densidad y cantidad geoespacialmente a través de mecanismos de machine learning. A esta información se le realiza una unión espacial con los polígonos de los municipios y de esta forma se obtiene la población de cada uno de ellos. Por lo tanto, se elimina el sesgo de uso tomando sumas de todos los viajes de cada uno de los orígenes y comparándolos con la población correspondiente de cada región. De allí se extraen factores de expansión o pesos que aplicamos a los viajes de cada región administrativa para tener una noción más real de los flujos de personas entre municipios.
 
-## Short or null trips
+## Viajes cortos o nulos
 
-Trips that begin and end in the same tile are removed from the average
-distances analysis. This is because we want the calculation of average
-distances to be based only on actual trips and not people standing still
-in one place. Subsequently, these trips are expanded with the same
-methodology and are subtracted from the trips within the same
-administrative region. In this way, this bias is eliminated, but there
-is the limitation of not counting some trips that could have lasted 1.9
-km o less for the calculation.
+Como se mencionó anteriormente, los tiles son cuadrados de 2 kilómetros por lado. Esto genera una limitación en el trabajo, ya que, por ejemplo, viajes de 1.9 kilómetros en el mismo tile van a figurar como “viajes cortos” con distancia media cero (inicio y llegada en el mismo tile), y otros viajes de menos de 1 km pero con origen y destino en tiles vecinos y estando significativamente alejados del centroide del tile van a figurar de manera agregada dentro del grupo de viajes que poseen distancia media de 2 o 2.82 kilómetros, dependiendo si el tile vecino está limítrofe a los lados o en diagonal, respectivamente. 
+	Para evitar que este sesgo se propague cuando se analizan regiones administrativas y distancias medias, se decidió eliminar del análisis a los viajes que tienen origen y destino en el mismo tile. Esto se materializó de la siguiente manera: se toman las personas que tienen como origen y como destino la misma región administrativa pero distinto tile. Luego, se aplican dos factores de expansión: el primero de acuerdo a la cantidad de personas que viajan dentro del límite administrativo que figura en el dataset de Movement Between Administrative Regions y el segundo según la población (como se explicó previamente), para luego sumarse a la cantidad de personas que viajan entre distintas regiones administrativas. 
+
 
     head(avg_dist, keepnums = FALSE)
 
@@ -72,11 +38,7 @@ km o less for the calculation.
 
 ## Output
 
-After performing all the operations mentioned above, tables containing
-average distances traveled and trips made in each of the tiles and
-administrative regions are obtained. This datasets can easily be
-statisticaly analyzed and graphed. For example, we can get a scatterplot
-of distances and trips for a specific city.
+Luego de realizar todas las operaciones mencionadas anteriormente, se obtienen tablas que contienen las distancias promedio recorridas y los viajes realizados en cada una de las tiles y regiones administrativas. Estos conjuntos de datos se pueden analizar y graficar fácilmente. Por ejemplo, podemos obtener un diagrama de dispersión de distancias y viajes para una ciudad específica.
 
     trips %>% 
       filter(date=="2021-10-10", length_km > 0.5, trips < 10000) %>% 
@@ -87,46 +49,20 @@ of distances and trips for a specific city.
 
 <img src="images/unnamed-chunk-3-1.png" width="80%" style="display: block; margin: auto;" />
 
-Through this model and inferring that at dawn the majority of the
-population sleeps and in the morning they go to work, educate
-themselves, relax or carry out various daily tasks, it is possible to
-obtain in a general way the average distances traveled by the people of
-each administrative region and the number of trips made. These
-indicators allow describing patterns of mobility of people, through
-which various analyzes of public transport policies can be made.
+A través de este modelo e infiriendo que de madrugada la mayoría de la población duerme y en la mañana va a trabajar, educarse, relajarse o realizar diversas tareas cotidianas, es posible obtener de manera general las distancias promedio recorridas por las personas de cada región administrativa y el número de viajes realizados. Estos indicadores permiten describir patrones de movilidad de las personas, a través de los cuales se pueden realizar diversos análisis de las políticas de transporte.
 
-For example, in Buenos Aires average travel distances of around 3 and 4
-kilometers are observed, which allows an incentive for sustainable
-mobility policies since they are distances that are very likely to be
-covered by **bicycle**.
+Por ejemplo, en Buenos Aires se observan distancias promedio de viaje en torno a los 3 y 4 kilómetros, lo que permite incentivar políticas de movilidad sustentable ya que son distancias muy probables de ser recorridas en **bicicleta**.
 
 ![Average distances in Buenos Aires](images/example.png)
 
-Another brief insight of the research carried out is about analyzing the
-average distances and trips based on accessibility to public transport
-and the central location of offices and jobs in cities. As long as
-economically active areas are accessible from mass transportation such
-as trains or BRT, the average distances will correspond to the distance
-from the centroid of the administrative region in question to the
-administrative center of the area.
+Otra conclusión de la investigación realizada se trata de sobre las distancias y viajes promedio basados en la accesibilidad al transporte público y la ubicación central de las oficinas y puestos de trabajo en las ciudades. Siempre que las áreas económicamente activas sean accesibles desde transporte masivo como trenes o BRT, las distancias promedio corresponderán a la distancia desde el centroide de la región administrativa en cuestión hasta el centro administrativo del área.
 
-Finally, origin and destination matrices were obtained from the data.
-These matrices take the number of people who moved from one
-administrative region to another and group them based on the sum of
-trips by region. This type of information allows to know the flows of
-people in a concise way and generate diagnoses on the use of public
-transport in the area and the possibilities of investment based on
-demand and supply.
+Finalmente, a partir de los datos se obtuvieron matrices de origen y destino. Estas matrices toman el número de personas que se trasladaron de una región administrativa a otra y las agrupan en función de la suma de viajes por región. Este tipo de información permite conocer los flujos de personas de manera concisa y generar diagnósticos sobre el uso del transporte público en la zona y las posibilidades de inversión en función de la demanda y la oferta.
 
 ## Dashboard
 
-To present the information in a dynamic and concise way, we proceeded to
-create a dashboard. All the statistical and design processes were made
-in RStudio with R programming language. This dashboard was generated in
-Shiny and can be accessed from the following link:
+Para presentar la información de manera dinámica y concisa, se procedió a crear un tablero. Todos los procesos estadísticos y de diseño se realizaron en RStudio con lenguaje de programación R. Este tablero fue generado en Shiny y se puede acceder desde el siguiente enlace:
 
 [Dashboard access](https://jfulponi.shinyapps.io/dashboard_omu/)
 
-There the maps and the origin and destination matrices described above
-can be found for each Latin American city of the study for a variety of
-dates.
+Allí se pueden encontrar los mapas y las matrices de origen y destino descritas anteriormente para cada ciudad latinoamericana del estudio para una variedad unificada de fechas.
