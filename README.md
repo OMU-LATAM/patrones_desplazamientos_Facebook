@@ -1,4 +1,4 @@
-## Introduction
+## Introducción
 
 Cuando las personas usan la aplicación de Facebook con los servicios de ubicación habilitados, los servidores reciben y guardan una aproximación de la latitud y la longitud del dispositivo a intervalos regulares. La información de ubicación se usa de varias maneras, como proporcionar funciones o contenido dentro de la aplicación que es más relevante para las personas. Los datasets de Facebook Disaster Maps (incluidos en el portal de Facebook for Good) proporcionan información sobre dónde se encuentran las personas y cómo se mueven de forma agregada, preservando la privacidad con algunos procesos como el privacy masking y random noise, pero manteniendo la usabilidad y la interpretabilidad de los datos. La información se presenta en dos niveles: por mosaico o tiles (cuadrados) o por región administrativa (como los censos oficiales de población) y en tres definiciones horarias: 8 de la mañana, 4 de la tarde y a la medianoche (en huso horario UTC). 
 
@@ -53,7 +53,7 @@ A través de este modelo e infiriendo que de madrugada la mayoría de la poblaci
 
 Por ejemplo, en Buenos Aires se observan distancias promedio de viaje en torno a los 3 y 4 kilómetros, lo que permite incentivar políticas de movilidad sustentable ya que son distancias muy probables de ser recorridas en **bicicleta**.
 
-![Average distances in Buenos Aires](images/example.png)
+![Distancias medias en Buenos Aires](images/example.png)
 
 Otra conclusión de la investigación realizada se trata de sobre las distancias y viajes promedio basados en la accesibilidad al transporte público y la ubicación central de las oficinas y puestos de trabajo en las ciudades. Siempre que las áreas económicamente activas sean accesibles desde transporte masivo como trenes o BRT, las distancias promedio corresponderán a la distancia desde el centroide de la región administrativa en cuestión hasta el centro administrativo del área.
 
